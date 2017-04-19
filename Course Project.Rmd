@@ -1,0 +1,141 @@
+---
+title: "Regression Course Project"
+output: html_document
+---
+### SYNOPSIS
+This is an analysis of mtcars dataset from 1974 Motor Trend US magazine. This dataset contains fues consumption (mpg) and 10 other variables for 32 different automobiles. We explore the relationship between the explanatory variables and the response variable (mpg) using the linear regression techniques. Based on our findings, we attempt to answer the following questions: 1) "Is an automatic or manual transmission better for MPG?", 2) "Quantify the MPG difference between automatic and manual transmissions"
+
+### EXPLORATORY ANALYSIS OF DATA
+
+We start by exploring the relationship between mpg and am (automatic/manual). From the plot, we can observe that the mpg for manual automobiles is larger than that of the automatic automobiles. However, there are many other variables that might impact the relationship.  
+
+```{r, fig.width = 6, fig.height = 2, echo=FALSE}
+library(ggplot2)
+# Relationship between am (0-Automatic/1-manual) and mpg variable
+p <- ggplot(mtcars, aes(x=factor(am), y=mpg)) + ggtitle("Fig1: Relationship between am and mpg")
+p + geom_boxplot(aes(fill = factor(am)))
+```
+
+
+### MODEL SELECTION  
+
+Next we will perform a simple linear regression using mpg as response variable, and all remaining attributes as explanatory variable. The objective here is to understand the linear relationship between reponse and explanatory variables, and create a baseline against which all following exclusions/additions will be compared.   
+
+
+```{r, echo=FALSE}
+fit.all <- lm(mpg~.,data=mtcars)
+sumfit.all = summary(fit.all)
+```
+
+We will fit a linear regression model using following model: 
+```{r, echo=FALSE}
+sumfit.all$call
+```
+
+When we look at the coefficients in Appendix 1 We can see that none of coefficient of the variables are significant. Also the residual standard error of the fit is `r sumfit.all$sigma`, which we will use as baseline. In the subsequent steps, we will attempt to reduce this number.  
+
+
+Next, we perform stepwise regression (Appendix 2) to get a better indication of which variables seem to contribute to the changes mpg, and have significant p-value and high AIC (Area Under Curve). Here is the model suggested by the stepwise procedure:  
+
+```{r, echo=FALSE}
+# Stepwise Regression
+library(MASS)
+fit.all <- lm(mpg~.,data=mtcars)
+step <- stepAIC(fit.all, direction="both", trace=FALSE)
+step.anova=step$anova # display results
+attr(step.anova,"heading")[5]
+```
+
+```{r, echo=FALSE}
+fit.all1 <- lm(mpg~wt + qsec + am,data=mtcars)
+sumfit.all1 = summary(fit.all1)
+```
+
+Appendix 3 shows the new list of coefficients based on the regression on the model recommended using stepwise procedure. As expected, they all seem to have significant p-values. Also, the residual standard error has improved (decreased) to `r round(sumfit.all1$sigma,2)`  
+
+In an attempt to further improve the model, we check for possible interaction relationships between the those 3 explanatory variables (am, wt and qsec). We know that mpg of an automobile is inversely related to the weight of the variable. Therefore, in the next plot, we check whether the relationship between mpg and weight changes for automatic vs. manual transmissions.
+
+
+```{r, echo=FALSE}
+fit.cp3 = lm(mpg ~ wt*factor(am), data=mtcars )
+```
+
+```{r, fig.width = 6, fig.height = 4, echo=FALSE}
+
+# Check the interaction effect of weight and am on mpg
+# Lighter vehicle tend to have higher mpg. Does this explain some variance between the mpg of automatic vs. manual transmissions?
+mtcars1=mtcars
+mtcars1$Transmission = ifelse(mtcars1$am==1,"Manual","Automatic")
+
+g.wt = ggplot(mtcars1, aes(x=wt, y=mpg, color=Transmission )) +   geom_point(shape=16, size=5) + ggtitle("Fig2: Interaction effect of weight and am on mpg")
+
+g.wt1 =  g.wt+ geom_abline(intercept=fit.cp3$coef[1], slope=fit.cp3$coef[2], size=2,col="red3")
+g.wt1=   g.wt1+ geom_abline(intercept=fit.cp3$coef[1]+fit.cp3$coef[3], slope=fit.cp3$coef[2]+fit.cp3$coef[4], size=2,col="blue3")
+g.wt1 
+
+```
+
+
+The red curve is the fit for automatic transmission and the intercept is 31.42 (refer to Appendix 4), and the slope is -3.78. The blue curve is fit for  manual transmission, and we notice that the intercept increases by 14.8 units. Here, the slope decreases by -5.3 over that of automatic. This means that the rate of change of mpg in automatic/manual transmission is different for different weights. So adding the interaction term to the stepwise model, we finally we come up with this model: 
+```{r, echo=FALSE}
+# Final Model used
+fit.final = lm(mpg~ qsec +  wt * factor(am), data=mtcars)
+fit.final.summ= summary(fit.final)
+fit.final.summ$call
+```
+
+```{r, echo=FALSE}
+fit.final.summ$coef
+```
+
+Its coefficients look significant and the residual standard error `r round(fit.final.summ$sigma,2)` is the lowest we've seen so far.  
+
+
+### CONCLUSIONS & OBSERVATIONS
+
+Residual plots show that the data is normally distributed. For lower values of weight, manual transmission seems to have better mpg. However, at higher values of weight, automatic transmission seems to have better mpg. Keeping variable 'qsec' constant, if we change from automatic to manual transmission, the intercept changes by 14.08, and the slope coefficient changes by -4.14.   
+
+
+
+
+##APPENDIX
+
+
+###1. Regression using all varibles
+```{r, echo=FALSE}
+# Linear regression using all variables in the dataset
+sumfit.all$coefficients
+```
+
+
+
+###2. Stepwise regression 
+```{r, echo=FALSE}
+# Stepwise Regression
+library(MASS)
+fit.all <- lm(mpg~.,data=mtcars)
+step <- stepAIC(fit.all, direction="both", trace=FALSE)
+step$anova # display results
+
+```
+
+
+###3. Linear regression using the model selected by stepwise procedure
+```{r, echo=FALSE}
+fit.all1 <- lm(mpg~wt + qsec + am,data=mtcars)
+sumfit.all1 = summary(fit.all1)
+sumfit.all1$coef
+```
+
+
+###4. Linear regression using weight and am as explanatory vars
+```{r, echo=FALSE}
+fit.cp3 = lm(mpg ~ wt*factor(am), data=mtcars )
+summary(fit.cp3)$coef
+```
+
+###. Residual plots of the final fitted model
+```{r, echo=FALSE}
+par(mfrow=c(2,2))
+plot(fit.final, panel=panel.smooth)
+```
